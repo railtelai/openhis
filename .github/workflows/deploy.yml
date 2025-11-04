@@ -1,0 +1,30 @@
+name: Frontend CI/CD → Minikube
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: SSH & Deploy to GCP Minikube
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd ~/his-frontend || git clone '${{ secrets.REPO_SSH }}' ~/his-frontend && cd ~/his-frontend
+            git fetch --all && git reset --hard origin/main
+
+            echo "${{ secrets.FRONTEND_ENV }}" > .env
+
+            docker build -t his-frontend:latest .
+            minikube image load his-frontend:latest
+
+            kubectl apply -f k8s/
+            kubectl rollout status deployment/his-frontend --timeout=120s || kubectl rollout undo deployment/his-frontend
